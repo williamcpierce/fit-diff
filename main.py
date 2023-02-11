@@ -68,6 +68,17 @@ class FitDiff:
                 names=["item", "qty"],
                 engine="python",
             ).fillna(1)
+        elif input_format == "eft":
+            parsed_data = pd.read_table(
+                filepath,
+                header=None,
+                sep=r"[\s][x](?=\d)",
+                names=["item", "qty"],
+                engine="python",
+            ).fillna(1)
+            # parsed_data = parsed_data[~parsed_data["item"].str.startswith("[")]
+            parsed_data["item"] = parsed_data["item"].str.strip("[]")
+            parsed_data["item"] = parsed_data["item"].str.split(",").str[0]
         else:
             raise ValueError(f"Unrecognized input format: {input_format}")
 
@@ -106,7 +117,10 @@ class FitDiff:
 
 if __name__ == "__main__":
     fit_diff = FitDiff(
-        fit_path="file_formats/multibuy.txt",
-        compare_path="file_formats/contents.tsv",
+        compare={"filepath": "file_formats/eft.txt", "input_type": "eft"},
+        fit={
+            "filepath": "file_formats/multibuy.txt",
+            "input_type": "multibuy",
+        },
     )
     print(fit_diff)
