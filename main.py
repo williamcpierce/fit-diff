@@ -49,17 +49,28 @@ class FitDiff:
 
     @staticmethod
     def _parse_multibuy_file(filepath: str) -> pd.DataFrame:
-        return (
-            pd.read_csv(
-                filepath,
-                header=None,
-                sep=r"[\s][x](?=\d)",
-                names=["item", "quantity"],
+        try:
+            df = (
+                pd.read_csv(
+                    filepath,
+                    header=None,
+                    sep=r"[\s][x](?=\d)",
+                    names=["item", "quantity"],
+                    engine="python",
+                )
+                .fillna(1)
+                .groupby("item", as_index=False)
+                .agg({"quantity": "sum"})
+                .sort_values("item")
             )
-            .groupby("item", as_index=False)
-            .agg({"quantity": "sum"})
-            .sort_values("item")
-        )
+            return df
+        except (
+            FileNotFoundError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+        ) as e:
+            print(f"Error: {e}")
+            return pd.DataFrame()
 
     def _create_quantity_diff(self) -> pd.DataFrame:
         joined = pd.merge(
