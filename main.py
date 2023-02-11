@@ -106,7 +106,7 @@ class FitDiff:
 
 if __name__ == "__main__":
     fit_diff = FitDiff(
-        fit_path="examples/multibuy.txt",
-        compare_path="examples/contents.tsv",
+        fit_path="file_formats/multibuy.txt",
+        compare_path="file_formats/contents.tsv",
     )
     print(fit_diff)
