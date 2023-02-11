@@ -46,14 +46,14 @@ class FitDiff:
     @staticmethod
     def _parse_multibuy_file(filepath: str) -> pd.DataFrame:
         return (
-            pd.read_csv(filepath, header=None)[0]
-            .str.split(r"([\s])[x](?=\d)", expand=True)
-            .drop(1, axis="columns")
-            .rename(columns={0: "item", 2: "quantity"})
-            .fillna(0)
-            .groupby("item")["quantity"]
-            .sum()
-            .reset_index(name="quantity")
+            pd.read_csv(
+                filepath,
+                header=None,
+                sep=r"[\s][x](?=\d)",
+                names=["item", "quantity"],
+            )
+            .groupby("item", as_index=False)
+            .agg({"quantity": "sum"})
             .sort_values("item")
         )
 
