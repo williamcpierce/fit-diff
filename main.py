@@ -11,7 +11,7 @@ class FitDiff:
 
     def __repr__(self) -> str:
         tables = [
-            f"\n{name}:\n{table.to_string()}\n"
+            f"\n{name}:\n{table.to_string(index=False)}\n"
             for name, table in self.summary_tables.items()
         ]
         return "".join(tables)
@@ -31,7 +31,7 @@ class FitDiff:
         """
         for df in [fit_data, compare_data]:
             if not all(col in df.columns for col in ["item", "qty"]):
-                raise ValueError(f"DataFrame must have columns 'item' and 'qty'")
+                raise ValueError("DataFrame must have columns 'item' and 'qty'")
         df = (
             pd.merge(
                 self._aggregate_item_qty(fit_data),
