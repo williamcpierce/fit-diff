@@ -73,20 +73,20 @@ class FitDiff:
             return pd.DataFrame()
 
     def _create_quantity_diff(self) -> pd.DataFrame:
-        joined = pd.merge(
+        df = pd.merge(
             self.user,
             self.doctrine,
             on="item",
             how="outer",
             suffixes=["_user", "_doctrine"],
         ).fillna(0)
-        joined[["quantity_user", "quantity_doctrine"]] = joined[
+        df[["quantity_user", "quantity_doctrine"]] = df[
             ["quantity_user", "quantity_doctrine"]
         ].astype(int)
-        quantity_diff = joined.assign(
-            quantity_diff=joined["quantity_user"] - joined["quantity_doctrine"]
-        )
-        return quantity_diff.sort_values("item")
+        df = df.assign(
+            quantity_diff=df["quantity_user"] - df["quantity_doctrine"]
+        ).sort_values("item")
+        return df
 
     def _create_summary_tables(self) -> dict:
         correct_items = self._create_correct_items_table()
