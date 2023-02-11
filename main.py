@@ -2,88 +2,82 @@ import pandas as pd
 
 
 class FitDiff:
-    def __init__(self, user: str, doctrine: str):
-        self.user = self.parse_multibuy(user)
-        self.doctrine = self.parse_contents(doctrine)
-        self.joined = self.diff_quantity()
-        self.correct, self.needed, self.extra = self.summary_tables()
+    def __init__(self, user: str, doctrine: str) -> None:
+        self.user = self._parse_multibuy(user)
+        self.doctrine = self._parse_contents(doctrine)
+        self.diff = self._diff_quantity()
+        self.summary_tables = self._create_summary_tables()
 
     def __str__(self) -> str:
-        return (
-            f"{'='*60}\nCorrect:\n"
-            f"{self.correct.to_string()}\n\n{'='*60}\n"
-            "Needed:\n"
-            f"{self.needed.to_string()}\n\n{'='*60}\n"
-            "Extra:\n"
-            f"{self.extra.to_string()}"
-        )
+        sep = "=" * 60
+        returnstr = ""
+        for name, table in self.summary_tables.items():
+            returnstr += f"{sep}\n{name}:\n{table.to_string(index=False)}\n"
 
-    def parse_contents(self, filepath) -> pd.DataFrame():
-        contents = pd.read_table(
+        return returnstr
+
+    @staticmethod
+    def _parse_contents(filepath: str) -> pd.DataFrame:
+        contents = pd.read_csv(
             filepath,
             header=None,
             names=["item", "type", "location", "quantity"],
             usecols=["item", "quantity"],
+            delimiter="\t",
         )
-        contents["item"] = contents["item"].apply(lambda x: x.rstrip())
-        contents["quantity"] = pd.to_numeric(contents["quantity"], downcast="integer")
+        contents["item"] = contents["item"].str.strip()
+        contents["quantity"] = contents["quantity"].astype(int)
         contents = (
             contents.groupby("item")["quantity"].sum().reset_index(name="quantity")
         )
-        return contents
+        return contents.sort_values("item")
 
-    def parse_multibuy(self, filepath) -> pd.DataFrame():
+    @staticmethod
+    def _parse_multibuy(filepath: str) -> pd.DataFrame:
         return (
-            pd.read_table(filepath, header=None)[0]
+            pd.read_csv(filepath, header=None)[0]
             .str.split(r"([\s])[x](?=\d)", expand=True)
             .drop(1, axis="columns")
             .rename(columns={0: "item", 2: "quantity"})
-            .replace([None], value=0)
+            .fillna(0)
             .groupby("item")["quantity"]
             .sum()
             .reset_index(name="quantity")
+            .sort_values("item")
         )
 
-    def diff_quantity(self) -> pd.DataFrame():
-        joined = (
-            pd.merge(
-                self.user,
-                self.doctrine,
-                how="outer",
-                on="item",
+    def _diff_quantity(self) -> pd.DataFrame:
+        joined = pd.merge(
+            self.user,
+            self.doctrine,
+            on="item",
+            how="outer",
+            suffixes=["_user", "_doctrine"],
+        ).fillna(value=0)
+        joined[["quantity_user", "quantity_doctrine"]] = joined[
+            ["quantity_user", "quantity_doctrine"]
+        ].astype(int)
+        diff = joined.assign(diff=joined["quantity_user"] - joined["quantity_doctrine"])
+        return diff.sort_values("item")
+
+    def _create_summary_tables(self) -> dict:
+        correct = self.diff.query("diff == 0")[
+            ["item", "quantity_doctrine"]
+        ].reset_index(drop=True)
+        correct = correct.rename(columns={"quantity_doctrine": "quantity"})
+
+        def create_summary(df, operator):
+            summary = df.query(f"diff {operator} 0")[["item", "diff"]].reset_index(
+                drop=True
             )
-            .fillna(value=0)
-            .rename(columns={"quantity_x": "user_qty", "quantity_y": "doctrine_qty"})
-        )
-        joined[["user_qty", "doctrine_qty"]] = joined[
-            ["user_qty", "doctrine_qty"]
-        ].apply(lambda x: pd.to_numeric(x, downcast="integer"))
-        joined["diff"] = joined["user_qty"] - joined["doctrine_qty"]
-        return joined
+            summary = summary.rename(columns={"diff": "quantity"})
+            summary["quantity"] = summary["quantity"].abs()
+            return summary
 
-    def summary_tables(self) -> list[pd.DataFrame()]:
-        correct = (
-            self.joined[(self.joined["diff"] == 0)]
-            .drop(["user_qty", "diff"], axis="columns")
-            .rename(columns={"doctrine_qty": "quantity"})
-            .reset_index(drop=True)
-        )
+        needed = create_summary(self.diff, "<")
+        extra = create_summary(self.diff, ">")
 
-        needed = (
-            self.joined[(self.joined["diff"] < 0)]
-            .drop(["user_qty", "doctrine_qty"], axis="columns")
-            .rename(columns={"diff": "quantity"})
-            .reset_index(drop=True)
-        )
-        needed[["quantity"]] = needed[["quantity"]].apply(abs)
-
-        extra = (
-            self.joined[(self.joined["diff"] > 0)]
-            .drop(["user_qty", "doctrine_qty"], axis="columns")
-            .rename(columns={"diff": "quantity"})
-            .reset_index(drop=True)
-        )
-        return (correct, needed, extra)
+        return {"correct": correct, "needed": needed, "extra": extra}
 
 
 diff = FitDiff(
