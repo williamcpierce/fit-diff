@@ -2,10 +2,10 @@ import pandas as pd
 
 
 class FitDiff:
-    def __init__(self, fit_path: str, compare_path: str) -> None:
+    def __init__(self, fit: dict, compare: dict) -> None:
         self.qty_diff = self._create_qty_diff(
-            self._parse_input_file(fit_path, "multibuy"),
-            self._parse_input_file(compare_path, "contents"),
+            self._parse_input_file(fit["filepath"], fit["input_type"]),
+            self._parse_input_file(compare["filepath"], compare["input_type"]),
         )
         self.summary_tables = self._create_summary_tables(self.qty_diff)
 
