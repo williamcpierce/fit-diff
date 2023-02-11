@@ -98,9 +98,9 @@ class FitDiff:
         missing_items = qty_diff[qty_diff["qty_diff"] < 0]
         extra_items = qty_diff[qty_diff["qty_diff"] > 0]
         return {
-            "Correct Items": correct_items.reset_index(drop=True),
-            "Missing Items": missing_items.reset_index(drop=True),
-            "Extra Items": extra_items.reset_index(drop=True),
+            "Correct Items": correct_items,
+            "Missing Items": missing_items,
+            "Extra Items": extra_items,
         }
 
 
