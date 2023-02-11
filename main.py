@@ -23,25 +23,29 @@ class FitDiff:
         quantity_col: str = "quantity",
     ) -> pd.DataFrame:
         try:
-            contents = pd.read_csv(
+            df = pd.read_csv(
                 filepath,
                 header=None,
                 names=[item_col, "type", "location", quantity_col],
                 usecols=[item_col, quantity_col],
                 delimiter="\t",
             )
-        except (FileNotFoundError, pd.errors.EmptyDataError):
-            print(f"Error reading file {filepath}.")
-            return pd.DataFrame(columns=[item_col, quantity_col])
 
-        contents[item_col] = contents[item_col].str.strip()
-        contents[quantity_col] = contents[quantity_col].astype(int)
-        contents = (
-            contents.groupby(item_col, as_index=False)
-            .agg({"quantity": "sum"})
-            .sort_values("item")
-        )
-        return contents.sort_values(item_col)
+            df[item_col] = df[item_col].str.strip()
+            df[quantity_col] = df[quantity_col].astype(int)
+            df = (
+                df.groupby(item_col, as_index=False)
+                .agg({"quantity": "sum"})
+                .sort_values("item")
+            )
+            return df
+        except (
+            FileNotFoundError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+        ) as e:
+            print(f"Error: {e}")
+            return pd.DataFrame()
 
     @staticmethod
     def _parse_multibuy_file(filepath: str) -> pd.DataFrame:
