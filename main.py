@@ -1,36 +1,10 @@
 import pandas as pd
 
 
-def parse_contents(filepath: str) -> pd.DataFrame():
-    contents = pd.read_table(
-        filepath,
-        header=None,
-        names=["item", "type", "location", "quantity"],
-        usecols=["item", "quantity"],
-    )
-    contents["item"] = contents["item"].apply(lambda x: x.rstrip())
-    contents["quantity"] = pd.to_numeric(contents["quantity"], downcast="integer")
-    contents = contents.groupby("item")["quantity"].sum().reset_index(name="quantity")
-    return contents
-
-
-def parse_multibuy(filepath: str) -> pd.DataFrame():
-    return (
-        pd.read_table("examples/multibuy.txt", header=None)[0]
-        .str.split(r"([\s])[x](?=\d)", expand=True)
-        .drop(1, axis="columns")
-        .rename(columns={0: "item", 2: "quantity"})
-        .replace([None], value=0)
-        .groupby("item")["quantity"]
-        .sum()
-        .reset_index(name="quantity")
-    )
-
-
 class FitDiff:
-    def __init__(self, user: pd.DataFrame(), doctrine: pd.DataFrame()):
-        self.user = user
-        self.doctrine = doctrine
+    def __init__(self, user: str, doctrine: str):
+        self.user = self.parse_multibuy(user)
+        self.doctrine = self.parse_contents(doctrine)
         self.joined = self.diff_quantity()
         self.correct, self.needed, self.extra = self.summary_tables()
 
@@ -42,6 +16,32 @@ class FitDiff:
             f"{self.needed.to_string()}\n\n{'='*60}\n"
             "Extra:\n"
             f"{self.extra.to_string()}"
+        )
+
+    def parse_contents(self, filepath) -> pd.DataFrame():
+        contents = pd.read_table(
+            filepath,
+            header=None,
+            names=["item", "type", "location", "quantity"],
+            usecols=["item", "quantity"],
+        )
+        contents["item"] = contents["item"].apply(lambda x: x.rstrip())
+        contents["quantity"] = pd.to_numeric(contents["quantity"], downcast="integer")
+        contents = (
+            contents.groupby("item")["quantity"].sum().reset_index(name="quantity")
+        )
+        return contents
+
+    def parse_multibuy(self, filepath) -> pd.DataFrame():
+        return (
+            pd.read_table(filepath, header=None)[0]
+            .str.split(r"([\s])[x](?=\d)", expand=True)
+            .drop(1, axis="columns")
+            .rename(columns={0: "item", 2: "quantity"})
+            .replace([None], value=0)
+            .groupby("item")["quantity"]
+            .sum()
+            .reset_index(name="quantity")
         )
 
     def diff_quantity(self) -> pd.DataFrame():
@@ -87,7 +87,7 @@ class FitDiff:
 
 
 diff = FitDiff(
-    user=parse_multibuy("examples/multibuy.txt"),
-    doctrine=parse_contents("examples/contents.tsv"),
+    user="examples/multibuy.txt",
+    doctrine="examples/contents.tsv",
 )
 print(str(diff))
