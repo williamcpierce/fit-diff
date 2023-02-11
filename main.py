@@ -37,9 +37,9 @@ class FitDiff:
         contents[item_col] = contents[item_col].str.strip()
         contents[quantity_col] = contents[quantity_col].astype(int)
         contents = (
-            contents.groupby(item_col)[quantity_col]
-            .sum()
-            .reset_index(name=quantity_col)
+            contents.groupby(item_col, as_index=False)
+            .agg({"quantity": "sum"})
+            .sort_values("item")
         )
         return contents.sort_values(item_col)
 
