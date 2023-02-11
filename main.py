@@ -61,27 +61,35 @@ class FitDiff:
         return diff.sort_values("item")
 
     def _create_summary_tables(self) -> dict:
-        correct_items = self.diff.query("diff == 0")[
-            ["item", "quantity_doctrine"]
-        ].reset_index(drop=True)
-        correct_items = correct_items.rename(columns={"quantity_doctrine": "quantity"})
-
-        def create_summary(df: pd.DataFrame, operator: str) -> pd.DataFrame:
-            summary = df.query(f"diff {operator} 0")[["item", "diff"]].reset_index(
-                drop=True
-            )
-            summary = summary.rename(columns={"diff": "quantity"})
-            summary["quantity"] = summary["quantity"].abs()
-            return summary
-
-        missing_items = create_summary(self.diff, "<")
-        extra_items = create_summary(self.diff, ">")
-
+        correct_items = self._create_correct_items_table()
+        missing_items = self._create_missing_items_table()
+        extra_items = self._create_extra_items_table()
         return {
             "Correct Items": correct_items,
             "Missing Items": missing_items,
             "Extra Items": extra_items,
         }
+
+    def _create_correct_items_table(self) -> pd.DataFrame:
+        correct_items = self.diff.query("diff == 0")[
+            ["item", "quantity_doctrine"]
+        ].reset_index(drop=True)
+        correct_items = correct_items.rename(columns={"quantity_doctrine": "quantity"})
+        return correct_items
+
+    def _create_missing_items_table(self) -> pd.DataFrame:
+        missing_items = self._create_summary(self.diff["diff"] < 0)
+        return missing_items
+
+    def _create_extra_items_table(self) -> pd.DataFrame:
+        extra_items = self._create_summary(self.diff["diff"] > 0)
+        return extra_items
+
+    def _create_summary(self, mask: pd.Series) -> pd.DataFrame:
+        summary = self.diff[mask][["item", "diff"]].reset_index(drop=True)
+        summary = summary.rename(columns={"diff": "quantity"})
+        summary["quantity"] = summary["quantity"].abs()
+        return summary
 
 
 diff = FitDiff(
