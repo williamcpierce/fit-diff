@@ -10,11 +10,11 @@ class FitDiff:
 
     def __str__(self) -> str:
         sep = "=" * 60
-        returnstr = ""
-        for name, table in self.summary_tables.items():
-            returnstr += f"{sep}\n{name}:\n{table.to_string(index=False)}\n"
-
-        return returnstr
+        lines = [
+            f"{sep}\n{name}:\n{table.to_string()}\n"
+            for name, table in self.summary_tables.items()
+        ]
+        return "".join(lines)
 
     @staticmethod
     def _parse_contents_file(filepath: str) -> pd.DataFrame:
