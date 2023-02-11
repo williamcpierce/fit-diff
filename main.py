@@ -2,111 +2,111 @@ import pandas as pd
 
 
 class FitDiff:
-    def __init__(self, user: str, doctrine: str) -> None:
-        self.user = self._parse_input_file(
-            filepath=user,
-            type="multibuy",
+    def __init__(self, fit_path: str, compare_path: str) -> None:
+        self.qty_diff = self._create_qty_diff(
+            self._parse_input_file(fit_path, "multibuy"),
+            self._parse_input_file(compare_path, "contents"),
         )
-        self.doctrine = self._parse_input_file(
-            filepath=doctrine,
-            type="contents",
-        )
-        self.quantity_diff = self._create_quantity_diff()
-        self.summary_tables = self._create_summary_tables()
+        self.summary_tables = self._create_summary_tables(self.qty_diff)
 
-    def __str__(self) -> str:
-        sep = "=" * 60
-        lines = [
-            f"{sep}\n{name}:\n{table.to_string()}\n"
+    def __repr__(self) -> str:
+        tables = [
+            f"\n{name}:\n{table.to_string()}\n"
             for name, table in self.summary_tables.items()
         ]
-        return "".join(lines)
+        return "".join(tables)
 
-    def _parse_input_file(
-        self,
-        filepath: str,
-        type: str,
-        item_col: str = "item",
-        quantity_col: str = "quantity",
+    def _create_qty_diff(
+        self, fit_data: pd.DataFrame, compare_data: pd.DataFrame
     ) -> pd.DataFrame:
-        try:
-            if type == "contents":
-                df = pd.read_table(
-                    filepath,
-                    header=None,
-                    names=[item_col, "type", "location", quantity_col],
-                    usecols=[item_col, quantity_col],
-                    dtype={quantity_col: "int"},
-                )
-            elif type == "multibuy":
-                df = pd.read_table(
-                    filepath,
-                    header=None,
-                    sep=r"[\s][x](?=\d)",
-                    names=[item_col, quantity_col],
-                    engine="python",
-                ).fillna(1)
-            else:
-                pass
-            return (
-                df.groupby(item_col, as_index=False)
-                .agg({quantity_col: "sum"})
-                .sort_values(item_col)
-            )
-        except (
-            FileNotFoundError,
-            pd.errors.EmptyDataError,
-            pd.errors.ParserError,
-        ) as e:
-            print(f"Error: {e}")
-            return pd.DataFrame()
-
-    def _create_quantity_diff(self) -> pd.DataFrame:
-        try:
-            df = pd.merge(
-                self.user,
-                self.doctrine,
+        """
+        Compare the quantity data in the input DataFrames by item. The method performs the
+        following steps:
+        - Aggregate the quantity data by item using _aggregate_item_qty method.
+        - Merge the aggregated data from the two input DataFrames using an outer join.
+        - Fill missing values with 0.
+        - Calculate the difference between the fit and compare quantities.
+        Return a new DataFrame with columns "item", "qty_fit", "qty_compare", and
+        "qty_diff", sorted by "item".
+        """
+        for df in [fit_data, compare_data]:
+            if not all(col in df.columns for col in ["item", "qty"]):
+                raise ValueError(f"DataFrame must have columns 'item' and 'qty'")
+        df = (
+            pd.merge(
+                self._aggregate_item_qty(fit_data),
+                self._aggregate_item_qty(compare_data),
                 on="item",
                 how="outer",
-                suffixes=["_user", "_doctrine"],
-            ).fillna(0)
-            df[["quantity_user", "quantity_doctrine"]] = df[
-                ["quantity_user", "quantity_doctrine"]
-            ].astype(int)
-            df = df.assign(
-                quantity_diff=df["quantity_user"] - df["quantity_doctrine"]
-            ).sort_values("item")
-            return df
-        except (KeyError) as e:
-            print(f"Error: {e}")
-            return pd.DataFrame()
-
-    def _create_summary_tables(self) -> dict:
-        try:
-            correct_items = self.quantity_diff.query("quantity_diff == 0").reset_index(
-                drop=True
+                suffixes=["_fit", "_compare"],
             )
-            missing_items = self.quantity_diff[
-                self.quantity_diff["quantity_diff"] < 0
-            ].reset_index(drop=True)
-            extra_items = self.quantity_diff[
-                self.quantity_diff["quantity_diff"] > 0
-            ].reset_index(drop=True)
-            return {
-                "Correct Items": correct_items,
-                "Missing Items": missing_items,
-                "Extra Items": extra_items,
-            }
-        except (
-            KeyError,
-            pd.errors.UndefinedVariableError,
-        ) as e:
-            print(f"Error: {e}")
-            return pd.DataFrame()
+            .fillna(0)
+            .sort_values("item")
+        )
+        df[["qty_fit", "qty_compare"]] = df[["qty_fit", "qty_compare"]].astype(int)
+        df["qty_diff"] = df["qty_fit"] - df["qty_compare"]
+        return df
+
+    @staticmethod
+    def _parse_input_file(filepath: str, input_format: str) -> pd.DataFrame:
+        """
+        Given a file path and an input format ("contents" or "multibuy"), parse the file
+        and return a DataFrame with columns "item" and "qty".
+        """
+        if input_format == "contents":
+            parsed_data = pd.read_table(
+                filepath,
+                header=None,
+                names=["item", "type", "location", "qty"],
+                usecols=["item", "qty"],
+            )
+        elif input_format == "multibuy":
+            parsed_data = pd.read_table(
+                filepath,
+                header=None,
+                sep=r"[\s][x](?=\d)",
+                names=["item", "qty"],
+                engine="python",
+            ).fillna(1)
+        else:
+            raise ValueError(f"Unrecognized input format: {input_format}")
+
+        return parsed_data
+
+    @staticmethod
+    def _aggregate_item_qty(data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Given a DataFrame with columns "item" and "qty", group the rows by "item" and
+        sum the "qty" values for each group.
+        Return a new DataFrame with columns "item" and "qty", sorted by "item".
+        """
+        return (
+            data.groupby("item", as_index=False).agg({"qty": "sum"}).sort_values("item")
+        )
+
+    @staticmethod
+    def _create_summary_tables(qty_diff: pd.DataFrame) -> dict:
+        """
+        Create summary tables from a given DataFrame with columns "item", "qty_fit", "qty_compare", and
+        "qty_diff".
+        Return a dict of three new DataFrames:
+        - Correct Items: Items with zero difference in quantity.
+        - Missing Items: Items with negative difference in quantity (i.e., in fit_data but not in compare_data).
+        - Extra Items: Items with positive difference in quantity (i.e., in compare_data but not in fit_data).
+        """
+        correct_items = qty_diff[qty_diff["qty_diff"] == 0]
+        missing_items = qty_diff[qty_diff["qty_diff"] < 0]
+        extra_items = qty_diff[qty_diff["qty_diff"] > 0]
+        return {
+            "Correct Items": correct_items.reset_index(drop=True),
+            "Missing Items": missing_items.reset_index(drop=True),
+            "Extra Items": extra_items.reset_index(drop=True),
+        }
 
 
-diff = FitDiff(
-    user="examples/multibuy.txt",
-    doctrine="examples/contents.tsv",
-)
-print(str(diff))
+if __name__ == "__main__":
+    fit_diff = FitDiff(
+        fit_path="examples/multibuy.txt",
+        compare_path="examples/contents.tsv",
+    )
+    print(fit_diff)
