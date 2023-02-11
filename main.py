@@ -5,7 +5,7 @@ class FitDiff:
     def __init__(self, user: str, doctrine: str) -> None:
         self.user = self._parse_multibuy_file(user)
         self.doctrine = self._parse_contents_file(doctrine)
-        self.diff = self._create_quantity_diff()
+        self.quantity_diff = self._create_quantity_diff()
         self.summary_tables = self._create_summary_tables()
 
     def __str__(self) -> str:
@@ -17,20 +17,31 @@ class FitDiff:
         return "".join(lines)
 
     @staticmethod
-    def _parse_contents_file(filepath: str) -> pd.DataFrame:
-        contents = pd.read_csv(
-            filepath,
-            header=None,
-            names=["item", "type", "location", "quantity"],
-            usecols=["item", "quantity"],
-            delimiter="\t",
-        )
-        contents["item"] = contents["item"].str.strip()
-        contents["quantity"] = contents["quantity"].astype(int)
+    def _parse_contents_file(
+        filepath: str,
+        item_col: str = "item",
+        quantity_col: str = "quantity",
+    ) -> pd.DataFrame:
+        try:
+            contents = pd.read_csv(
+                filepath,
+                header=None,
+                names=[item_col, "type", "location", quantity_col],
+                usecols=[item_col, quantity_col],
+                delimiter="\t",
+            )
+        except (FileNotFoundError, pd.errors.EmptyDataError):
+            print(f"Error reading file {filepath}.")
+            return pd.DataFrame(columns=[item_col, quantity_col])
+
+        contents[item_col] = contents[item_col].str.strip()
+        contents[quantity_col] = contents[quantity_col].astype(int)
         contents = (
-            contents.groupby("item")["quantity"].sum().reset_index(name="quantity")
+            contents.groupby(item_col)[quantity_col]
+            .sum()
+            .reset_index(name=quantity_col)
         )
-        return contents.sort_values("item")
+        return contents.sort_values(item_col)
 
     @staticmethod
     def _parse_multibuy_file(filepath: str) -> pd.DataFrame:
@@ -57,8 +68,10 @@ class FitDiff:
         joined[["quantity_user", "quantity_doctrine"]] = joined[
             ["quantity_user", "quantity_doctrine"]
         ].astype(int)
-        diff = joined.assign(diff=joined["quantity_user"] - joined["quantity_doctrine"])
-        return diff.sort_values("item")
+        quantity_diff = joined.assign(
+            quantity_diff=joined["quantity_user"] - joined["quantity_doctrine"]
+        )
+        return quantity_diff.sort_values("item")
 
     def _create_summary_tables(self) -> dict:
         correct_items = self._create_correct_items_table()
@@ -71,23 +84,25 @@ class FitDiff:
         }
 
     def _create_correct_items_table(self) -> pd.DataFrame:
-        correct_items = self.diff.query("diff == 0")[
+        correct_items = self.quantity_diff.query("quantity_diff == 0")[
             ["item", "quantity_doctrine"]
         ].reset_index(drop=True)
         correct_items = correct_items.rename(columns={"quantity_doctrine": "quantity"})
         return correct_items
 
     def _create_missing_items_table(self) -> pd.DataFrame:
-        missing_items = self._create_summary(self.diff["diff"] < 0)
+        missing_items = self._create_summary(self.quantity_diff["quantity_diff"] < 0)
         return missing_items
 
     def _create_extra_items_table(self) -> pd.DataFrame:
-        extra_items = self._create_summary(self.diff["diff"] > 0)
+        extra_items = self._create_summary(self.quantity_diff["quantity_diff"] > 0)
         return extra_items
 
     def _create_summary(self, mask: pd.Series) -> pd.DataFrame:
-        summary = self.diff[mask][["item", "diff"]].reset_index(drop=True)
-        summary = summary.rename(columns={"diff": "quantity"})
+        summary = self.quantity_diff[mask][["item", "quantity_diff"]].reset_index(
+            drop=True
+        )
+        summary = summary.rename(columns={"quantity_diff": "quantity"})
         summary["quantity"] = summary["quantity"].abs()
         return summary
 
