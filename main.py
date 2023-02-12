@@ -1,13 +1,14 @@
 import pandas as pd
+import time
 
 
 class FitDiff:
     def __init__(self, fit: dict, compare: dict) -> None:
         self.qty_diff = self._create_qty_diff(
-            self._parse_input_file(fit["filepath"], fit["input_type"]),
-            self._parse_input_file(compare["filepath"], compare["input_type"]),
+            self._parse_input_file(fit),
+            self._parse_input_file(compare),
         )
-        self.summary_tables = self._create_summary_tables(self.qty_diff)
+        self.summary_tables = self.qty_diff.pipe(self._create_summary_tables)
 
     def __repr__(self) -> str:
         tables = [
@@ -29,74 +30,71 @@ class FitDiff:
         Return a new DataFrame with columns "item", "qty_fit", "qty_compare", and
         "qty_diff", sorted by "item".
         """
-        for df in [fit_data, compare_data]:
-            if not all(col in df.columns for col in ["item", "qty"]):
-                raise ValueError("DataFrame must have columns 'item' and 'qty'")
-        df = (
+        return (
             pd.merge(
-                self._aggregate_item_qty(fit_data),
-                self._aggregate_item_qty(compare_data),
+                fit_data.pipe(self._aggregate_item_qty),
+                compare_data.pipe(self._aggregate_item_qty),
                 on="item",
                 how="outer",
                 suffixes=["_fit", "_compare"],
             )
             .fillna(0)
             .sort_values("item")
+            .assign(qty_diff=lambda x: x["qty_fit"] - x["qty_compare"])
         )
-        df[["qty_fit", "qty_compare"]] = df[["qty_fit", "qty_compare"]].astype(int)
-        df["qty_diff"] = df["qty_fit"] - df["qty_compare"]
-        return df
 
     @staticmethod
-    def _parse_input_file(filepath: str, input_format: str) -> pd.DataFrame:
+    def _parse_input_file(input_: dict) -> pd.DataFrame:
         """
-        Given a file path and an input format ("contents" or "multibuy"), parse the file
-        and return a DataFrame with columns "item" and "qty".
+        Given a dict with values for a file path and an input format ("contents" or "multibuy"),
+        parse the file and return a DataFrame with columns "item" and "qty".
         """
-        if input_format == "contents":
-            parsed_data = pd.read_table(
-                filepath,
-                header=None,
-                names=["item", "type", "location", "qty"],
-                usecols=["item", "qty"],
-            )
-        elif input_format == "multibuy":
-            parsed_data = pd.read_table(
-                filepath,
-                header=None,
-                sep=r"[\s][x](?=\d)",
-                names=["item", "qty"],
-                engine="python",
-            ).fillna(1)
-        elif input_format == "eft":
-            parsed_data = pd.read_table(
-                filepath,
-                header=None,
-                sep=r"[\s][x](?=\d)",
-                names=["item", "qty"],
-                engine="python",
-            ).fillna(1)
-            # parsed_data = parsed_data[~parsed_data["item"].str.startswith("[")]
-            parsed_data["item"] = parsed_data["item"].str.strip("[]")
-            parsed_data["item"] = parsed_data["item"].str.split(",").str[0]
-        else:
-            raise ValueError(f"Unrecognized input format: {input_format}")
-
-        return parsed_data
+        match input_["format"]:
+            case "contents":
+                return pd.read_table(
+                    input_["filepath"],
+                    header=None,
+                    names=["item", "type", "location", "qty"],
+                    usecols=["item", "qty"],
+                )
+            case "multibuy":
+                return pd.read_table(
+                    input_["filepath"],
+                    header=None,
+                    sep=r"[\s][x](?=\d)",
+                    names=["item", "qty"],
+                    engine="python",
+                ).fillna(1)
+            case "eft":
+                return (
+                    pd.read_table(
+                        input_["filepath"],
+                        header=None,
+                        sep=r"[\s][x](?=\d)",
+                        names=["item", "qty"],
+                        engine="python",
+                    )
+                    .fillna(1)
+                    .assign(
+                        item=lambda x: x["item"].str.strip("[]").str.split(",").str[0]
+                    )
+                )
+        # else:
+        #     raise ValueError(f"Unrecognized input format: {input_['format']}")
 
     @staticmethod
-    def _aggregate_item_qty(data: pd.DataFrame) -> pd.DataFrame:
+    def _aggregate_item_qty(df: pd.DataFrame) -> pd.DataFrame:
         """
         Given a DataFrame with columns "item" and "qty", group the rows by "item" and
         sum the "qty" values for each group.
         Return a new DataFrame with columns "item" and "qty", sorted by "item".
         """
         return (
-            data.groupby("item", as_index=False).agg({"qty": "sum"}).sort_values("item")
+            df.groupby("item", as_index=False).agg({"qty": "sum"}).sort_values("item")
         )
 
     @staticmethod
-    def _create_summary_tables(qty_diff: pd.DataFrame) -> dict:
+    def _create_summary_tables(df: pd.DataFrame) -> dict:
         """
         Create summary tables from a given DataFrame with columns "item", "qty_fit", "qty_compare", and
         "qty_diff".
@@ -105,22 +103,22 @@ class FitDiff:
         - Missing Items: Items with negative difference in quantity (i.e., in fit_data but not in compare_data).
         - Extra Items: Items with positive difference in quantity (i.e., in compare_data but not in fit_data).
         """
-        correct_items = qty_diff[qty_diff["qty_diff"] == 0]
-        missing_items = qty_diff[qty_diff["qty_diff"] < 0]
-        extra_items = qty_diff[qty_diff["qty_diff"] > 0]
         return {
-            "Correct Items": correct_items,
-            "Missing Items": missing_items,
-            "Extra Items": extra_items,
+            "Correct Items": df[df["qty_diff"] == 0],
+            "Missing Items": df[df["qty_diff"] < 0],
+            "Extra Items": df[df["qty_diff"] > 0],
         }
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     fit_diff = FitDiff(
-        compare={"filepath": "file_formats/eft.txt", "input_type": "eft"},
+        # compare={"filepath": "file_formats/contents.tsv", "format": "contents"},
+        compare={"filepath": "file_formats/eft.txt", "format": "eft"},
         fit={
             "filepath": "file_formats/multibuy.txt",
-            "input_type": "multibuy",
+            "format": "multibuy",
         },
     )
     print(fit_diff)
+    print("--- %s ms ---" % round((time.time() - start_time) * 1000, 2))
