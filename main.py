@@ -39,6 +39,7 @@ class FitDiff:
                 suffixes=["_fit", "_compare"],
             )
             .fillna(0)
+            .astype({"qty_fit": "int", "qty_compare": "int"})
             .sort_values("item")
             .assign(qty_diff=lambda x: x["qty_fit"] - x["qty_compare"])
         )
