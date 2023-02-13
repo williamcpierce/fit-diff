@@ -3,10 +3,10 @@ import time
 
 
 class FitDiff:
-    def __init__(self, fit: dict, compare: dict) -> None:
+    def __init__(self, fit: dict, doctrine: dict) -> None:
         self.qty_diff = self._create_qty_diff(
             self._parse_input_file(fit),
-            self._parse_input_file(compare),
+            self._parse_input_file(doctrine),
         )
         self.summary_tables = self.qty_diff.pipe(self._create_summary_tables)
 
@@ -18,30 +18,32 @@ class FitDiff:
         return "".join(tables)
 
     def _create_qty_diff(
-        self, fit_data: pd.DataFrame, compare_data: pd.DataFrame
+        self,
+        fit_data: pd.DataFrame,
+        doctrine_data: pd.DataFrame,
     ) -> pd.DataFrame:
         """
-        Compare the quantity data in the input DataFrames by item. The method performs the
+        doctrine the quantity data in the input DataFrames by item. The method performs the
         following steps:
         - Aggregate the quantity data by item using _aggregate_item_qty method.
         - Merge the aggregated data from the two input DataFrames using an outer join.
         - Fill missing values with 0.
-        - Calculate the difference between the fit and compare quantities.
-        Return a new DataFrame with columns "item", "qty_fit", "qty_compare", and
+        - Calculate the difference between the fit and doctrine quantities.
+        Return a new DataFrame with columns "item", "qty_fit", "qty_doctrine", and
         "qty_diff", sorted by "item".
         """
         return (
             pd.merge(
                 fit_data.pipe(self._aggregate_item_qty),
-                compare_data.pipe(self._aggregate_item_qty),
+                doctrine_data.pipe(self._aggregate_item_qty),
                 on="item",
                 how="outer",
-                suffixes=["_fit", "_compare"],
+                suffixes=["_fit", "_doctrine"],
             )
             .fillna(0)
-            .astype({"qty_fit": "int", "qty_compare": "int"})
+            .astype({"qty_fit": "int", "qty_doctrine": "int"})
             .sort_values("item")
-            .assign(qty_diff=lambda x: x["qty_fit"] - x["qty_compare"])
+            .assign(qty_diff=lambda x: x["qty_fit"] - x["qty_doctrine"])
         )
 
     @staticmethod
@@ -80,8 +82,8 @@ class FitDiff:
                         item=lambda x: x["item"].str.strip("[]").str.split(",").str[0]
                     )
                 )
-        # else:
-        #     raise ValueError(f"Unrecognized input format: {input_['format']}")
+            case _:
+                raise ValueError(f"Unrecognized input format: {input_['format']}")
 
     @staticmethod
     def _aggregate_item_qty(df: pd.DataFrame) -> pd.DataFrame:
@@ -97,12 +99,12 @@ class FitDiff:
     @staticmethod
     def _create_summary_tables(df: pd.DataFrame) -> dict:
         """
-        Create summary tables from a given DataFrame with columns "item", "qty_fit", "qty_compare", and
+        Create summary tables from a given DataFrame with columns "item", "qty_fit", "qty_doctrine", and
         "qty_diff".
         Return a dict of three new DataFrames:
         - Correct Items: Items with zero difference in quantity.
-        - Missing Items: Items with negative difference in quantity (i.e., in fit_data but not in compare_data).
-        - Extra Items: Items with positive difference in quantity (i.e., in compare_data but not in fit_data).
+        - Missing Items: Items with negative difference in quantity (i.e., in fit_data but not in doctrine_data).
+        - Extra Items: Items with positive difference in quantity (i.e., in doctrine_data but not in fit_data).
         """
         return {
             "Correct Items": df[df["qty_diff"] == 0],
@@ -114,12 +116,9 @@ class FitDiff:
 if __name__ == "__main__":
     start_time = time.time()
     fit_diff = FitDiff(
-        # compare={"filepath": "file_formats/contents.tsv", "format": "contents"},
-        compare={"filepath": "file_formats/eft.txt", "format": "eft"},
-        fit={
-            "filepath": "file_formats/multibuy.txt",
-            "format": "multibuy",
-        },
+        fit={"filepath": "file_formats/multibuy.txt", "format": "multibuy"},
+        doctrine={"filepath": "file_formats/eft.txt", "format": "eft"},
+        # doctrine={"filepath": "file_formats/contents.tsv", "format": "contents"},
     )
     print(fit_diff)
     print("--- %s ms ---" % round((time.time() - start_time) * 1000, 2))
