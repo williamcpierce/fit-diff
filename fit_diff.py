@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import time
 
@@ -115,10 +116,15 @@ class FitDiff:
 
 if __name__ == "__main__":
     start_time = time.time()
+
+    parser = argparse.ArgumentParser(description="Ship type")
+    parser.add_argument("ship_type", type=str, help="Ship type")
+    args = parser.parse_args()
+
     fit_diff = FitDiff(
-        fit={"filepath": "file_formats/multibuy.txt", "format": "multibuy"},
-        doctrine={"filepath": "file_formats/eft.txt", "format": "eft"},
-        # doctrine={"filepath": "file_formats/contents.tsv", "format": "contents"},
+        fit={"filepath": "contents.tsv", "format": "contents"},
+        doctrine={"filepath": f"{args.ship_type}/eft.txt", "format": "eft"},
     )
     print(fit_diff)
+
     print("--- %s ms ---" % round((time.time() - start_time) * 1000, 2))
